@@ -1,0 +1,55 @@
+name: ZAP Selenium Passive Scan
+
+on: [push, pull_request]  
+
+jobs:
+  zap_test:
+    runs-on: ubuntu-latest
+
+    steps:
+      # Step 1: Checkout the code
+      - name: Checkout repository
+        uses: actions/checkout@v2
+
+      # Step 2: Set up Java (for TestNG and Selenium)
+      - name: Setup Java
+        uses: actions/setup-java@v2
+        with:
+          distribution: 'temurin'
+          java-version: '19'  # Choose Java version based on your project
+
+      # Step 3: Set up Chrome (for Selenium WebDriver tests)
+      - name: Set up Chrome
+        uses: browser-actions/setup-chrome@v1
+
+      # Step 4: Install Maven dependencies
+      - name: Install Maven dependencies
+        run: mvn install
+
+      # Step 5: Pull the OWASP ZAP Docker image (for running ZAP)
+      - name: Pull OWASP ZAP Docker image
+        run: docker pull zaproxy/zap-stable
+
+      # Step 6: Start ZAP in Docker (with API enabled for interaction)
+      - name: Start OWASP ZAP
+        run: |
+          docker run -d --name zap -p 8083:8083 zaproxy/zap-stable zap.sh -daemon -config api.disablekey=true
+        # ZAP will be available at http://localhost:8080
+
+      # Step 7: Run your test method (Selenium + ZAP integration)
+      - name: Run ZAP Selenium test
+        run: |
+          mvn -Dtest=zaptest#testPassiveScan test
+          
+      # Step 8: Generate ZAP report after tests
+      - name: Generate ZAP report
+        run: |
+          docker exec zap zap-cli report -o zap_report.html -f html
+        # Generate the ZAP report in HTML format
+
+      # Step 9: Upload the ZAP report as an artifact
+      - name: Upload ZAP Report
+        uses: actions/upload-artifact@v3
+        with:
+          name: ZAP Scan Report
+          path: zap_report.html
